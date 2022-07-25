@@ -18,6 +18,7 @@ package authtls
 
 import (
 	"fmt"
+	"strings"
 
 	networking "k8s.io/api/networking/v1"
 
@@ -42,12 +43,12 @@ var (
 // Config contains the AuthSSLCert used for mutual authentication
 // and the configured ValidationDepth
 type Config struct {
-	resolver.AuthSSLCert
-	VerifyClient       string `json:"verify_client"`
-	ValidationDepth    int    `json:"validationDepth"`
-	ErrorPage          string `json:"errorPage"`
-	PassCertToUpstream bool   `json:"passCertToUpstream"`
-	MatchCN            string `json:"matchCN"`
+	Certs              []resolver.AuthSSLCert `json:"certs"`
+	VerifyClient       string                 `json:"verify_client"`
+	ValidationDepth    int                    `json:"validationDepth"`
+	ErrorPage          string                 `json:"errorPage"`
+	PassCertToUpstream bool                   `json:"passCertToUpstream"`
+	MatchCN            string                 `json:"matchCN"`
 	AuthTLSError       string
 }
 
@@ -59,8 +60,13 @@ func (assl1 *Config) Equal(assl2 *Config) bool {
 	if assl1 == nil || assl2 == nil {
 		return false
 	}
-	if !(&assl1.AuthSSLCert).Equal(&assl2.AuthSSLCert) {
+	if len(assl1.Certs) != len(assl2.Certs) {
 		return false
+	}
+	for i, cert := range assl1.Certs {
+		if !(&cert).Equal(&assl2.Certs[i]) {
+			return false
+		}
 	}
 	if assl1.VerifyClient != assl2.VerifyClient {
 		return false
@@ -93,22 +99,33 @@ func (a authTLS) Parse(ing *networking.Ingress) (interface{}, error) {
 	var err error
 	config := &Config{}
 
-	tlsauthsecret, err := parser.GetStringAnnotation("auth-tls-secret", ing)
+	tlsAuthAnnotation, err := parser.GetStringAnnotation("auth-tls-secret", ing)
 	if err != nil {
 		return &Config{}, err
 	}
 
-	_, _, err = k8s.ParseNameNS(tlsauthsecret)
-	if err != nil {
-		return &Config{}, ing_errors.NewLocationDenied(err.Error())
+	tlsAuthSecrets := strings.Split(tlsAuthAnnotation, ",")
+	for i := range tlsAuthSecrets {
+		tlsAuthSecrets[i] = strings.TrimSpace(tlsAuthSecrets[i])
 	}
 
-	authCert, err := a.r.GetAuthCertificate(tlsauthsecret)
-	if err != nil {
-		e := fmt.Errorf("error obtaining certificate: %w", err)
-		return &Config{}, ing_errors.LocationDenied{Reason: e}
+	var authSSLCerts []resolver.AuthSSLCert
+	for _, tlsAuthSecret := range tlsAuthSecrets {
+		_, _, err = k8s.ParseNameNS(tlsAuthSecret)
+		if err != nil {
+			return &Config{}, ing_errors.NewLocationDenied(err.Error())
+		}
+
+		authSSLCert, err := a.r.GetAuthCertificate(tlsAuthSecret)
+		if err != nil {
+			e := fmt.Errorf("error obtaining certificate: %w", err)
+			return &Config{}, ing_errors.LocationDenied{Reason: e}
+		}
+
+		authSSLCerts = append(authSSLCerts, *authSSLCert)
 	}
-	config.AuthSSLCert = *authCert
+
+	config.Certs = authSSLCerts
 
 	config.VerifyClient, err = parser.GetStringAnnotation("auth-tls-verify-client", ing)
 	if err != nil || !authVerifyClientRegex.MatchString(config.VerifyClient) {

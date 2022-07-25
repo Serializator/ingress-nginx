@@ -638,11 +638,13 @@ func (n *NGINXController) getBackendServers(ingresses []*ingress.Ingress) ([]*in
 				server.AuthTLSError = anns.CertificateAuth.AuthTLSError
 			}
 
-			if server.CertificateAuth.CAFileName == "" {
+			if len(server.CertificateAuth.Certs) == 0 {
 				server.CertificateAuth = anns.CertificateAuth
-				if server.CertificateAuth.Secret != "" && server.CertificateAuth.CAFileName == "" {
-					klog.V(3).Infof("Secret %q has no 'ca.crt' key, mutual authentication disabled for Ingress %q",
-						server.CertificateAuth.Secret, ingKey)
+				for _, cert := range server.CertificateAuth.Certs {
+					if cert.Secret != "" && cert.CAFileName == "" {
+						klog.V(3).Infof("Secret %q has no 'ca.crt' key, mutual authentication disabled for Ingress %q",
+							cert.Secret, ingKey)
+					}
 				}
 			} else {
 				klog.V(3).Infof("Server %q is already configured for mutual authentication (Ingress %q)",

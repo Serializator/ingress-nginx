@@ -113,9 +113,13 @@ func TestAnnotations(t *testing.T) {
 		t.Errorf("unexpected error getting secret %v", err)
 	}
 
-	if u.AuthSSLCert.Secret != secret.Secret {
-		t.Errorf("expected %v but got %v", secret.Secret, u.AuthSSLCert.Secret)
+	if len(u.Certs) == 0 {
+		t.Errorf("expected 1 certificate but got 0")
 	}
+	if u.Certs[0].Secret != secret.Secret {
+		t.Errorf("expected %v but got %v", secret.Secret, u.Certs[0].Secret)
+	}
+
 	if u.VerifyClient != "on" {
 		t.Errorf("expected %v but got %v", "on", u.VerifyClient)
 	}
@@ -150,9 +154,13 @@ func TestAnnotations(t *testing.T) {
 		t.Errorf("expected *Config but got %v", u)
 	}
 
-	if u.AuthSSLCert.Secret != secret.Secret {
-		t.Errorf("expected %v but got %v", secret.Secret, u.AuthSSLCert.Secret)
+	if len(u.Certs) == 0 {
+		t.Errorf("expected 1 certificate but got 0")
 	}
+	if u.Certs[0].Secret != secret.Secret {
+		t.Errorf("expected %v but got %v", secret.Secret, u.Certs[0].Secret)
+	}
+
 	if u.VerifyClient != "off" {
 		t.Errorf("expected %v but got %v", "off", u.VerifyClient)
 	}
@@ -256,13 +264,13 @@ func TestEquals(t *testing.T) {
 		CAFileName: "/ssl/ca.crt",
 		CASHA:      "abc",
 	}
-	cfg1.AuthSSLCert = sslCert1
-	cfg2.AuthSSLCert = sslCert2
+	cfg1.Certs = []resolver.AuthSSLCert{sslCert1}
+	cfg2.Certs = []resolver.AuthSSLCert{sslCert2}
 	result = cfg1.Equal(cfg2)
 	if result != false {
 		t.Errorf("Expected false")
 	}
-	cfg2.AuthSSLCert = sslCert1
+	cfg2.Certs = []resolver.AuthSSLCert{sslCert1}
 
 	// Different Verify Client
 	cfg1.VerifyClient = "on"
